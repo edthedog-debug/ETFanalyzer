@@ -2,13 +2,13 @@
     const etfMap = {
         "LU1681042435": { 
             name: "Amundi MSCI Europe Growth UCITS ETF Acc", 
-            ticker: "CG9.PA", 
-            stooqTicker: "cg9.fr"
+            ticker: "CG9.PA",
+            symbol: "CG9.PA"
         },
         "IE00BYX5NX33": { 
             name: "iShares Core MSCI Europe UCITS ETF (Acc)", 
-            ticker: "IMAE.AS", 
-            stooqTicker: "imae.nl"
+            ticker: "IMAE.AS",
+            symbol: "IMAE.AS"
         }
     };
 
@@ -48,78 +48,22 @@
     }
 
     async function fetchMarketData(etf) {
-        const yfUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${etf.ticker}?range=1mo&interval=1d`;
-
-        // Proveedor 1: Yahoo Finance vía Corsproxy.io
-        try {
-            const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(yfUrl)}`);
-            if (res.ok) {
-                const data = await res.json();
-                const parsed = parseYahooResponse(data);
-                if (parsed) return parsed;
-            }
-        } catch (e) {
-            console.warn("Proveedor 1 (Corsproxy) falló:", e);
+        // Proveedor directo mediante Financial Modeling Prep API (Demo Key abierta)
+        const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${etf.symbol}?timeseries=30&apikey=demo`;
+        
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Error en API de mercado");
+        
+        const data = await res.json();
+        if (!data.historical || data.historical.length === 0) {
+            throw new Error("Sin datos históricos");
         }
 
-        // Proveedor 2: Yahoo Finance vía Allorigins Proxy
-        try {
-            const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(yfUrl)}`);
-            if (res.ok) {
-                const data = await res.json();
-                const parsed = parseYahooResponse(data);
-                if (parsed) return parsed;
-            }
-        } catch (e) {
-            console.warn("Proveedor 2 (Allorigins) falló:", e);
-        }
+        const historicalData = data.historical.reverse();
+        const dateLabels = historicalData.map(item => item.date);
+        const historicalPrices = historicalData.map(item => parseFloat(item.close.toFixed(2)));
 
-        // Proveedor 3: Stooq (Servicio financiero alternativo)
-        try {
-            const stooqUrl = `https://stooq.com/q/d/l/?s=${etf.stooqTicker}&i=d`;
-            const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(stooqUrl)}`);
-            if (res.ok) {
-                const csvText = await res.text();
-                const lines = csvText.trim().split('\n').slice(1);
-                const dateLabels = [];
-                const historicalPrices = [];
-
-                lines.slice(-20).forEach(line => {
-                    const cols = line.split(',');
-                    if (cols.length >= 5 && !isNaN(parseFloat(cols[4]))) {
-                        dateLabels.push(cols[0]);
-                        historicalPrices.push(parseFloat(parseFloat(cols[4]).toFixed(2)));
-                    }
-                });
-
-                if (historicalPrices.length > 0) return { dateLabels, historicalPrices };
-            }
-        } catch (e) {
-            console.warn("Proveedor 3 (Stooq) falló:", e);
-        }
-
-        throw new Error("No se pudo conectar a ningún proveedor de datos de mercado.");
-    }
-
-    function parseYahooResponse(data) {
-        const result = data?.chart?.result?.[0];
-        if (!result) return null;
-
-        const timestamps = result.timestamp || [];
-        const prices = result.indicators?.quote?.[0]?.close || [];
-
-        const dateLabels = [];
-        const historicalPrices = [];
-
-        timestamps.forEach((ts, idx) => {
-            if (prices[idx] !== null && prices[idx] !== undefined) {
-                const dateStr = new Date(ts * 1000).toISOString().split('T')[0];
-                dateLabels.push(dateStr);
-                historicalPrices.push(parseFloat(prices[idx].toFixed(2)));
-            }
-        });
-
-        return historicalPrices.length > 0 ? { dateLabels, historicalPrices } : null;
+        return { dateLabels, historicalPrices };
     }
 
     async function loadEtfData(isin) {
@@ -167,7 +111,7 @@
             renderTable(dateLabels, historicalPrices, forecastLabels, arimaPrices, mlPrices);
             renderCharts(dateLabels, historicalPrices, forecastLabels, arimaPrices, mlPrices);
         } catch (err) {
-            console.error(err);
+            console.error("Error al cargar datos:", err);
             if (statusEl) statusEl.textContent = "Error de conexión con datos de mercado.";
             const priceEl = document.getElementById('latestClosePrice');
             if (priceEl) priceEl.textContent = "-- EUR";
@@ -253,7 +197,10 @@
         });
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
+    // Inicialización segura tras cargar el DOM
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => loadEtfData('LU1681042435'));
+    } else {
         loadEtfData('LU1681042435');
-    });
+    }
 </script>
