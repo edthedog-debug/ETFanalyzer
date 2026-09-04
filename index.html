@@ -162,7 +162,7 @@
             <h3 data-i18n="lastClose">Último Cierre Registrado:</h3>
             <p id="latestClosePrice">-- €</p>
             <span id="latestCloseDate" style="color: var(--text-muted); font-size: 14px;">--/--/----</span>
-            <div id="statusMessage">Iniciando...</div>
+            <div id="statusMessage">Cargando datos locales...</div>
         </div>
         <div class="card">
             <h3>Fondo / ETF</h3>
@@ -170,6 +170,10 @@
             <div style="margin-top: 10px; font-size: 14px; color: var(--text-muted);">
                 <span>ISIN: <strong id="fundIsin">--</strong></span> | 
                 <span>Ticker: <strong id="fundTicker">--</strong></span>
+            </div>
+            <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 8px;">
+                <span data-i18n="lastUpdateLabel">Última actualización:</span> <span id="lastUpdateGlobal">--</span><br>
+                <span data-i18n="nextUpdateLabel">Próxima actualización en:</span> <strong id="countdownTimer" style="color: #38bdf8;">--:--:--</strong>
             </div>
         </div>
     </div>
@@ -207,37 +211,26 @@
 </div>
 
 <script>
-    const etfMap = {
-        "LU1681042435": { 
-            name: "Amundi MSCI Europe Growth UCITS ETF Acc", 
-            ticker: "CG9.PA",
-            symbol: "CG9.PA"
-        },
-        "IE00BYX5NX33": { 
-            name: "iShares Core MSCI Europe UCITS ETF (Acc)", 
-            ticker: "IMAE.AS",
-            symbol: "IMAE.AS"
-        }
-    };
-
     const i18n = {
         es: {
             currency: "Divisa", selectEtf: "Seleccionar ETF:", selectLang: "Idioma / Language:",
-            lastClose: "Último Cierre Registrado:", statusReady: "Conectado a mercado en tiempo real",
-            statusLoading: "Descargando cotizaciones reales...", arimaSub: "Predicción Lineal & Volatilidad Dinámica",
+            lastClose: "Último Cierre Registrado:", statusReady: "Datos sincronizados desde repositorio local",
+            statusLoading: "Cargando datos...", arimaSub: "Predicción Lineal & Volatilidad Dinámica",
             mlSub: "LightGBM / XGBoost Forecast", tableTitle: "📊 Precios de Cierre Históricos y Proyectados (EUR)",
             thDate: "Fecha", thClose: "Cierre Real (€)", thArima: "Predicción ARIMA (€)", thMl: "Predicción ML (€)",
             thStatus: "Estado", tagHistorical: "Cierre Oficial", tagForecast: "Proyección 30D",
-            chartHist: "Cierre Real", chartArima: "Forecast ARIMA", chartMl: "Forecast ML"
+            chartHist: "Cierre Real", chartArima: "Forecast ARIMA", chartMl: "Forecast ML",
+            lastUpdateLabel: "Última actualización:", nextUpdateLabel: "Próxima actualización en:"
         },
         en: {
             currency: "Currency", selectEtf: "Select ETF:", selectLang: "Language / Idioma:",
-            lastClose: "Latest Registered Close:", statusReady: "Connected to live market data",
-            statusLoading: "Fetching real-time market data...", arimaSub: "Linear Forecast & Dynamic Volatility",
+            lastClose: "Latest Registered Close:", statusReady: "Data synchronized from local repository",
+            statusLoading: "Loading data...", arimaSub: "Linear Forecast & Dynamic Volatility",
             mlSub: "LightGBM / XGBoost Forecast", tableTitle: "📊 Historical & Projected Closing Prices (EUR)",
             thDate: "Date", thClose: "Actual Close (€)", thArima: "ARIMA Forecast (€)", thMl: "ML Forecast (€)",
             thStatus: "Status", tagHistorical: "Official Close", tagForecast: "30D Forecast",
-            chartHist: "Actual Close", chartArima: "ARIMA Forecast", chartMl: "ML Forecast"
+            chartHist: "Actual Close", chartArima: "ARIMA Forecast", chartMl: "ML Forecast",
+            lastUpdateLabel: "Last update:", nextUpdateLabel: "Next update in:"
         }
     };
 
@@ -245,6 +238,8 @@
     let currentIsin = 'LU1681042435';
     let arimaChartInstance = null;
     let mlChartInstance = null;
+    let globalMarketData = null;
+    let nextUpdateIso = null;
 
     function changeLanguage(lang) {
         currentLang = lang;
@@ -252,93 +247,90 @@
             const key = el.getAttribute('data-i18n');
             if (i18n[lang][key]) el.textContent = i18n[lang][key];
         });
-        loadEtfData(currentIsin);
-    }
-
-    async function fetchMarketData(etf) {
-        // Obtenemos los datos directamente de Yahoo Finance a través de un proxy público estable
-        const yfUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${etf.ticker}?range=1mo&interval=1d`;
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(yfUrl)}`;
-        
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error("Error en la descarga de datos de mercado");
-        
-        const data = await res.json();
-        const result = data?.chart?.result?.[0];
-        
-        if (!result || !result.timestamp || !result.indicators?.quote?.[0]?.close) {
-            throw new Error("Formato de datos no válido o sin histórico");
+        if (globalMarketData) {
+            loadEtfData(currentIsin);
         }
-
-        const timestamps = result.timestamp;
-        const prices = result.indicators.quote[0].close;
-
-        const dateLabels = [];
-        const historicalPrices = [];
-
-        timestamps.forEach((ts, idx) => {
-            if (prices[idx] !== null && prices[idx] !== undefined) {
-                const dateStr = new Date(ts * 1000).toISOString().split('T')[0];
-                dateLabels.push(dateStr);
-                historicalPrices.push(parseFloat(prices[idx].toFixed(2)));
-            }
-        });
-
-        if (historicalPrices.length === 0) throw new Error("No hay precios registrados en este periodo");
-
-        return { dateLabels, historicalPrices };
     }
 
-    async function loadEtfData(isin) {
-        currentIsin = isin;
-        const etf = etfMap[isin];
-        if (!etf) return;
+    async function fetchMarketData() {
+        // Carga el archivo JSON generado automáticamente por GitHub Actions
+        const res = await fetch('market_data.json');
+        if (!res.ok) throw new Error("No se pudo cargar el archivo market_data.json");
+        return await res.json();
+    }
 
+    async function initDashboard() {
+        const statusEl = document.getElementById('statusMessage');
+        try {
+            globalMarketData = await fetchMarketData();
+            
+            // Mostrar fechas globales
+            if (globalMarketData.lastUpdateTimestamp) {
+                const updateDate = new Date(globalMarketData.lastUpdateTimestamp);
+                document.getElementById('lastUpdateGlobal').textContent = updateDate.toLocaleString();
+            }
+            if (globalMarketData.nextUpdateTimestamp) {
+                nextUpdateIso = globalMarketData.nextUpdateTimestamp;
+                startCountdown();
+            }
+
+            loadEtfData(currentIsin);
+        } catch (err) {
+            console.error("Error al inicializar:", err);
+            if (statusEl) statusEl.textContent = "Error: Ejecuta el GitHub Action para generar 'market_data.json'.";
+        }
+    }
+
+    function startCountdown() {
+        if (!nextUpdateIso) return;
+        const targetTime = new Date(nextUpdateIso).getTime();
+
+        setInterval(() => {
+            const now = new Date().getTime();
+            const distance = targetTime - now;
+
+            const timerEl = document.getElementById('countdownTimer');
+            if (!timerEl) return;
+
+            if (distance < 0) {
+                timerEl.textContent = "Actualizando...";
+                return;
+            }
+
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            timerEl.textContent = `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+        }, 1000);
+    }
+
+    function loadEtfData(isin) {
+        currentIsin = isin;
+        if (!globalMarketData || !globalMarketData.etfs[isin]) return;
+
+        const etfData = globalMarketData.etfs[isin];
         const nameEl = document.getElementById('fundNameTitle');
         const isinEl = document.getElementById('fundIsin');
         const tickerEl = document.getElementById('fundTicker');
         const statusEl = document.getElementById('statusMessage');
 
-        if (nameEl) nameEl.textContent = etf.name;
+        if (nameEl) nameEl.textContent = etfData.name;
         if (isinEl) isinEl.textContent = isin;
-        if (tickerEl) tickerEl.textContent = etf.ticker;
-        if (statusEl) statusEl.textContent = i18n[currentLang].statusLoading;
+        if (tickerEl) tickerEl.textContent = etfData.ticker;
+        if (statusEl) statusEl.textContent = i18n[currentLang].statusReady;
 
-        try {
-            const { dateLabels, historicalPrices } = await fetchMarketData(etf);
+        const lastPrice = etfData.lastClose;
+        const lastDate = etfData.lastDate;
 
-            const lastPrice = historicalPrices[historicalPrices.length - 1];
-            const lastDate = dateLabels[dateLabels.length - 1];
+        const dateEl = document.getElementById('latestCloseDate');
+        const priceEl = document.getElementById('latestClosePrice');
 
-            const dateEl = document.getElementById('latestCloseDate');
-            const priceEl = document.getElementById('latestClosePrice');
+        if (dateEl) dateEl.textContent = lastDate;
+        if (priceEl) priceEl.textContent = `€${lastPrice.toFixed(2)}`;
 
-            if (dateEl) dateEl.textContent = lastDate;
-            if (priceEl) priceEl.textContent = `€${lastPrice.toFixed(2)}`;
-            if (statusEl) statusEl.textContent = i18n[currentLang].statusReady;
-
-            const forecastDays = 30;
-            const forecastLabels = [];
-            const arimaPrices = [];
-            const mlPrices = [];
-            let lastDateObj = new Date(lastDate);
-
-            for (let i = 1; i <= forecastDays; i++) {
-                lastDateObj.setDate(lastDateObj.getDate() + 1);
-                forecastLabels.push(lastDateObj.toISOString().split('T')[0]);
-                
-                arimaPrices.push(parseFloat((lastPrice + (i * (lastPrice * 0.0004)) + Math.sin(i * 0.3) * (lastPrice * 0.002)).toFixed(2)));
-                mlPrices.push(parseFloat((lastPrice + (i * (lastPrice * 0.0006)) + Math.cos(i * 0.4) * (lastPrice * 0.003)).toFixed(2)));
-            }
-
-            renderTable(dateLabels, historicalPrices, forecastLabels, arimaPrices, mlPrices);
-            renderCharts(dateLabels, historicalPrices, forecastLabels, arimaPrices, mlPrices);
-        } catch (err) {
-            console.error("Error al cargar datos:", err);
-            if (statusEl) statusEl.textContent = "Error de conexión con datos de mercado.";
-            const priceEl = document.getElementById('latestClosePrice');
-            if (priceEl) priceEl.textContent = "-- EUR";
-        }
+        renderTable(etfData.dateLabels, etfData.historicalPrices, etfData.forecastLabels, etfData.arimaPrices, etfData.mlPrices);
+        renderCharts(etfData.dateLabels, etfData.historicalPrices, etfData.forecastLabels, etfData.arimaPrices, etfData.mlPrices);
     }
 
     function renderTable(histDates, histPrices, foreDates, arimaPrices, mlPrices) {
@@ -420,11 +412,11 @@
         });
     }
 
-    // Inicialización segura tras cargar el DOM
+    // Inicialización segura
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => loadEtfData('LU1681042435'));
+        document.addEventListener('DOMContentLoaded', initDashboard);
     } else {
-        loadEtfData('LU1681042435');
+        initDashboard();
     }
 </script>
 </body>
