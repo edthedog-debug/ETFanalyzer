@@ -8,7 +8,7 @@ etfs = {
         "name": "Amundi MSCI Europe Growth UCITS ETF Acc",
         "ticker": "CG9.PA",
     },
-    "IE00BYX5NX33": {
+    "IE00B4K48X80": {
         "name": "iShares Core MSCI Europe UCITS ETF (Acc)",
         "ticker": "IMAE.AS",
     },
