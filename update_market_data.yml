@@ -1,0 +1,39 @@
+name: Actualizar Datos de Mercado
+
+on:
+  schedule:
+    # Se ejecuta todos los días a las 06:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Permite ejecutarlo manualmente desde la pestaña Actions de GitHub
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Necesario para poder hacer commit y push automático de los cambios
+    
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance
+
+      - name: Ejecutar script de actualización
+        run: python update_data.py
+
+      - name: Guardar y subir cambios al repositorio
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add market_data.json
+          git commit -m "Auto-actualización de precios de cierre de ETFs [skip ci]" || echo "No hay cambios para confirmar"
+          git push
