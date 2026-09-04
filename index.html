@@ -63,10 +63,11 @@
             padding: 20px;
             border-radius: 8px;
             border: 1px solid var(--border-color);
+            color: var(--text-main);
         }
 
         .card h3 { margin: 0 0 5px 0; font-size: 14px; color: var(--text-muted); }
-        .card p { margin: 0; font-size: 24px; font-weight: bold; }
+        .card p { margin: 0; font-size: 24px; font-weight: bold; color: var(--text-main); }
         
         #statusMessage {
             font-size: 12px;
@@ -110,11 +111,13 @@
             width: 100%;
             border-collapse: collapse;
             text-align: left;
+            color: var(--text-main);
         }
 
         th, td {
             padding: 12px;
             border-bottom: 1px solid var(--border-color);
+            color: var(--text-main);
         }
 
         th { color: var(--text-muted); font-weight: normal; }
@@ -139,4 +142,315 @@
 <body>
 
 <div class="container">
-    <div
+    <!-- Controles de Navegación -->
+    <div class="header-controls">
+        <div>
+            <label data-i18n="selectEtf">Seleccionar ETF:</label>
+            <select id="etfSelector" onchange="loadEtfData(this.value)">
+                <option value="LU1681042435">Amundi MSCI Europe Growth</option>
+                <option value="IE00BYX5NX33">iShares Core MSCI Europe</option>
+            </select>
+        </div>
+        <div>
+            <label data-i18n="selectLang">Idioma / Language:</label>
+            <select onchange="changeLanguage(this.value)">
+                <option value="es">Español</option>
+                <option value="en">English</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Panel de Información Principal -->
+    <div class="info-grid">
+        <div class="card">
+            <h3 data-i18n="lastClose">Último Cierre Registrado:</h3>
+            <p id="latestClosePrice">-- €</p>
+            <span id="latestCloseDate" style="color: var(--text-muted); font-size: 14px;">--/--/----</span>
+            <div id="statusMessage">Cargando datos locales...</div>
+        </div>
+        <div class="card">
+            <h3>Fondo / ETF</h3>
+            <p id="fundNameTitle" style="font-size: 18px; color: var(--text-main);">Cargando...</p>
+            <div style="margin-top: 10px; font-size: 14px; color: var(--text-muted);">
+                <span>ISIN: <strong id="fundIsin" style="color: var(--text-main);">--</strong></span> | 
+                <span>Ticker: <strong id="fundTicker" style="color: var(--text-main);">--</strong></span>
+            </div>
+            <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 8px;">
+                <span data-i18n="lastUpdateLabel">Última actualización:</span> <span id="lastUpdateGlobal" style="color: var(--text-main);">--</span><br>
+                <span data-i18n="nextUpdateLabel">Próxima actualización en:</span> <strong id="countdownTimer" style="color: #38bdf8;">--:--:--</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- Área de Gráficas (Series Temporales y Proyecciones) -->
+    <div class="charts-grid">
+        <div class="chart-container">
+            <h4 data-i18n="arimaSub">Predicción Lineal & Volatilidad Dinámica</h4>
+            <canvas id="arimaChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h4 data-i18n="mlSub">LightGBM / XGBoost Forecast</h4>
+            <canvas id="mlChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Tabla de Datos -->
+    <div class="table-container">
+        <h3 data-i18n="tableTitle" style="margin-top: 0; color: var(--text-main);">📊 Precios de Cierre Históricos y Proyectados (EUR)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th data-i18n="thDate">Fecha</th>
+                    <th data-i18n="thClose">Cierre Real (€)</th>
+                    <th data-i18n="thArima">Predicción ARIMA (€)</th>
+                    <th data-i18n="thMl">Predicción ML (€)</th>
+                    <th data-i18n="thTrend">Tendencia Predicha</th>
+                    <th data-i18n="thStatus">Estado</th>
+                </tr>
+            </thead>
+            <tbody id="closingPricesTableBody">
+                <!-- Se inyecta dinámicamente vía JS -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const i18n = {
+        es: {
+            currency: "Divisa", selectEtf: "Seleccionar ETF:", selectLang: "Idioma / Language:",
+            lastClose: "Último Cierre Registrado:", statusReady: "Datos sincronizados desde repositorio local",
+            statusLoading: "Cargando datos...", arimaSub: "Predicción Lineal & Volatilidad Dinámica",
+            mlSub: "LightGBM / XGBoost Forecast", tableTitle: "📊 Precios de Cierre Históricos y Proyectados (EUR)",
+            thDate: "Fecha", thClose: "Cierre Real (€)", thArima: "Predicción ARIMA (€)", thMl: "Predicción ML (€)",
+            thTrend: "Tendencia Predicha", thStatus: "Estado", tagHistorical: "Cierre Oficial", tagForecast: "Proyección 30D",
+            trendUp: "▲ Subirá", trendDown: "▼ Bajará", trendNeutral: "— Estable", tagHistDash: "—",
+            chartHist: "Cierre Real", chartArima: "Forecast ARIMA", chartMl: "Forecast ML",
+            lastUpdateLabel: "Última actualización:", nextUpdateLabel: "Próxima actualización en:"
+        },
+        en: {
+            currency: "Currency", selectEtf: "Select ETF:", selectLang: "Language / Idioma:",
+            lastClose: "Latest Registered Close:", statusReady: "Data synchronized from local repository",
+            statusLoading: "Loading data...", arimaSub: "Linear Forecast & Dynamic Volatility",
+            mlSub: "LightGBM / XGBoost Forecast", tableTitle: "📊 Historical & Projected Closing Prices (EUR)",
+            thDate: "Date", thClose: "Actual Close (€)", thArima: "ARIMA Forecast (€)", thMl: "ML Forecast (€)",
+            thTrend: "Predicted Trend", thStatus: "Status", tagHistorical: "Official Close", tagForecast: "30D Forecast",
+            trendUp: "▲ Bullish (Up)", trendDown: "▼ Bearish (Down)", trendNeutral: "— Flat", tagHistDash: "—",
+            chartHist: "Actual Close", chartArima: "ARIMA Forecast", chartMl: "ML Forecast",
+            lastUpdateLabel: "Last update:", nextUpdateLabel: "Next update in:"
+        }
+    };
+
+    let currentLang = 'es';
+    let currentIsin = 'LU1681042435';
+    let arimaChartInstance = null;
+    let mlChartInstance = null;
+    let globalMarketData = null;
+    let nextUpdateIso = null;
+
+    function changeLanguage(lang) {
+        currentLang = lang;
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (i18n[lang][key]) el.textContent = i18n[lang][key];
+        });
+        if (globalMarketData) {
+            loadEtfData(currentIsin);
+        }
+    }
+
+    async function fetchMarketData() {
+        // Carga el archivo JSON generado automáticamente por GitHub Actions
+        const res = await fetch('market_data.json');
+        if (!res.ok) throw new Error("No se pudo cargar el archivo market_data.json");
+        return await res.json();
+    }
+
+    async function initDashboard() {
+        const statusEl = document.getElementById('statusMessage');
+        try {
+            globalMarketData = await fetchMarketData();
+            
+            // Mostrar fechas globales
+            if (globalMarketData.lastUpdateTimestamp) {
+                const updateDate = new Date(globalMarketData.lastUpdateTimestamp);
+                document.getElementById('lastUpdateGlobal').textContent = updateDate.toLocaleString();
+            }
+            if (globalMarketData.nextUpdateTimestamp) {
+                nextUpdateIso = globalMarketData.nextUpdateTimestamp;
+                startCountdown();
+            }
+
+            loadEtfData(currentIsin);
+        } catch (err) {
+            console.error("Error al inicializar:", err);
+            if (statusEl) statusEl.textContent = "Error: Ejecuta el GitHub Action para generar 'market_data.json'.";
+        }
+    }
+
+    function startCountdown() {
+        if (!nextUpdateIso) return;
+        const targetTime = new Date(nextUpdateIso).getTime();
+
+        setInterval(() => {
+            const now = new Date().getTime();
+            const distance = targetTime - now;
+
+            const timerEl = document.getElementById('countdownTimer');
+            if (!timerEl) return;
+
+            if (distance < 0) {
+                timerEl.textContent = "Actualizando...";
+                return;
+            }
+
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            timerEl.textContent = `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+        }, 1000);
+    }
+
+    function loadEtfData(isin) {
+        currentIsin = isin;
+        if (!globalMarketData || !globalMarketData.etfs[isin]) return;
+
+        const etfData = globalMarketData.etfs[isin];
+        const nameEl = document.getElementById('fundNameTitle');
+        const isinEl = document.getElementById('fundIsin');
+        const tickerEl = document.getElementById('fundTicker');
+        const statusEl = document.getElementById('statusMessage');
+
+        if (nameEl) nameEl.textContent = etfData.name;
+        if (isinEl) isinEl.textContent = isin;
+        if (tickerEl) tickerEl.textContent = etfData.ticker;
+        if (statusEl) statusEl.textContent = i18n[currentLang].statusReady;
+
+        const lastPrice = etfData.lastClose;
+        const lastDate = etfData.lastDate;
+
+        const dateEl = document.getElementById('latestCloseDate');
+        const priceEl = document.getElementById('latestClosePrice');
+
+        if (dateEl) dateEl.textContent = lastDate;
+        if (priceEl) priceEl.textContent = `€${lastPrice.toFixed(2)}`;
+
+        renderTable(etfData.dateLabels, etfData.historicalPrices, etfData.forecastLabels, etfData.arimaPrices, etfData.mlPrices);
+        renderCharts(etfData.dateLabels, etfData.historicalPrices, etfData.forecastLabels, etfData.arimaPrices, etfData.mlPrices);
+    }
+
+    function renderTable(histDates, histPrices, foreDates, arimaPrices, mlPrices) {
+        const tbody = document.getElementById('closingPricesTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        const basePrice = histPrices[histPrices.length - 1];
+
+        // Para las filas de proyección, la tendencia se basa en la comparación general frente al último cierre real (tendencia de subida/bajada global)
+        for (let i = foreDates.length - 1; i >= 0; i--) {
+            const currentArima = arimaPrices[i];
+            const currentMl = mlPrices[i];
+
+            const arimaUp = currentArima > basePrice;
+            const mlUp = currentMl > basePrice;
+
+            let trendHtml = '';
+            let trendClass = '';
+
+            // Si ambos modelos coinciden en la tendencia respecto al cierre actual
+            if (arimaUp && mlUp) {
+                trendHtml = i18n[currentLang].trendUp;
+                trendClass = 'tag-up';
+            } else if (!arimaUp && !mlUp) {
+                trendHtml = i18n[currentLang].trendDown;
+                trendClass = 'tag-down';
+            } else {
+                trendHtml = i18n[currentLang].trendNeutral;
+                trendClass = 'tag-historical';
+            }
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${foreDates[i]}</strong></td>
+                <td>--</td>
+                <td>€${currentArima.toFixed(2)}</td>
+                <td>€${currentMl.toFixed(2)}</td>
+                <td><span class="status-tag ${trendClass}">${trendHtml}</span></td>
+                <td><span class="status-tag tag-forecast">${i18n[currentLang].tagForecast}</span></td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        for (let i = histDates.length - 1; i >= 0; i--) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${histDates[i]}</td>
+                <td><strong>€${histPrices[i].toFixed(2)}</strong></td>
+                <td>--</td>
+                <td>--</td>
+                <td><span style="color: var(--text-muted);">${i18n[currentLang].tagHistDash}</span></td>
+                <td><span class="status-tag tag-historical">${i18n[currentLang].tagHistorical}</span></td>
+            `;
+            tbody.appendChild(tr);
+        }
+    }
+
+    function renderCharts(histDates, histPrices, foreDates, arimaPrices, mlPrices) {
+        const arimaCanvas = document.getElementById('arimaChart');
+        const mlCanvas = document.getElementById('mlChart');
+        if (!arimaCanvas || !mlCanvas) return;
+
+        const fullLabels = [...histDates, ...foreDates];
+        const lastPrice = histPrices[histPrices.length - 1];
+
+        const arimaFut = [...Array(histDates.length - 1).fill(null), lastPrice, ...arimaPrices];
+        const mlFut = [...Array(histDates.length - 1).fill(null), lastPrice, ...mlPrices];
+        const histData = [...histPrices, ...Array(foreDates.length).fill(null)];
+
+        if (arimaChartInstance) arimaChartInstance.destroy();
+        if (mlChartInstance) mlChartInstance.destroy();
+
+        const opts = {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', autoSkip: true, maxTicksLimit: 8 } },
+                y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', callback: v => '€' + v } }
+            },
+            plugins: { legend: { labels: { color: '#f8fafc' } } }
+        };
+
+        arimaChartInstance = new Chart(arimaCanvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: fullLabels,
+                datasets: [
+                    { label: i18n[currentLang].chartHist, data: histData, borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0 },
+                    { label: i18n[currentLang].chartArima, data: arimaFut, borderColor: '#22c55e', borderDash: [5, 5], borderWidth: 2, pointRadius: 0 }
+                ]
+            },
+            options: opts
+        });
+
+        mlChartInstance = new Chart(mlCanvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: fullLabels,
+                datasets: [
+                    { label: i18n[currentLang].chartHist, data: histData, borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0 },
+                    { label: i18n[currentLang].chartMl, data: mlFut, borderColor: '#a855f7', borderDash: [4, 4], borderWidth: 2, pointRadius: 0 }
+                ]
+            },
+            options: opts
+        });
+    }
+
+    // Inicialización segura
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDashboard);
+    } else {
+        initDashboard();
+    }
+</script>
+</body>
+</html>
