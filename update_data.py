@@ -1,16 +1,13 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import math
 import yfinance as yf
 
-# Definición de los ETFs con sus tickers correspondientes
+# Definición del ETF único
 etfs = {
     "LU1681042435": {
         "name": "Amundi MSCI Europe Growth UCITS ETF Acc",
         "ticker": "CG9.PA",
-    },
-    "IE00BYX5NX33": {
-        "name": "iShares Core MSCI Europe UCITS ETF (Acc)",
-        "ticker": "IMAE.AS",
     },
 }
 
@@ -42,9 +39,7 @@ for isin, info in etfs.items():
 
     current_date_obj = datetime.strptime(last_date, "%Y-%m-%d") if last_date else datetime.now()
 
-    import math
     for i in range(1, forecast_days + 1):
-        from datetime import timedelta
         current_date_obj += timedelta(days=1)
         forecast_labels.append(current_date_obj.strftime("%Y-%m-%d"))
         
@@ -70,7 +65,7 @@ for isin, info in etfs.items():
 now_utc = datetime.now(timezone.utc)
 payload = {
     "lastUpdateTimestamp": now_utc.isoformat(),
-    "nextUpdateTimestamp": datetime.combine(now_utc.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc).isoformat(), # Programado para el día siguiente
+    "nextUpdateTimestamp": datetime.combine(now_utc.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc).isoformat(),
     "etfs": data_output
 }
 
