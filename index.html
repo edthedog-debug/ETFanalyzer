@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ETF Forecasting Dashboard</title>
+    <!-- Importar Chart.js para renderizar las gráficas de predicción -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -63,11 +64,10 @@
             padding: 20px;
             border-radius: 8px;
             border: 1px solid var(--border-color);
-            color: var(--text-main);
         }
 
         .card h3 { margin: 0 0 5px 0; font-size: 14px; color: var(--text-muted); }
-        .card p { margin: 0; font-size: 24px; font-weight: bold; color: var(--text-main); }
+        .card p { margin: 0; font-size: 24px; font-weight: bold; }
         
         #statusMessage {
             font-size: 12px;
@@ -111,13 +111,11 @@
             width: 100%;
             border-collapse: collapse;
             text-align: left;
-            color: var(--text-main);
         }
 
         th, td {
             padding: 12px;
             border-bottom: 1px solid var(--border-color);
-            color: var(--text-main);
         }
 
         th { color: var(--text-muted); font-weight: normal; }
@@ -130,8 +128,6 @@
         }
         .tag-historical { background-color: rgba(59, 130, 246, 0.2); color: #60a5fa; }
         .tag-forecast { background-color: rgba(168, 85, 247, 0.2); color: #c084fc; }
-        .tag-up { background-color: rgba(34, 197, 94, 0.2); color: #22c55e; }
-        .tag-down { background-color: rgba(239, 68, 68, 0.2); color: #ef4444; }
 
         @media (max-width: 768px) {
             .charts-grid { grid-template-columns: 1fr; }
@@ -170,13 +166,13 @@
         </div>
         <div class="card">
             <h3>Fondo / ETF</h3>
-            <p id="fundNameTitle" style="font-size: 18px; color: var(--text-main);">Cargando...</p>
+            <p id="fundNameTitle" style="font-size: 18px;">Cargando...</p>
             <div style="margin-top: 10px; font-size: 14px; color: var(--text-muted);">
-                <span>ISIN: <strong id="fundIsin" style="color: var(--text-main);">--</strong></span> | 
-                <span>Ticker: <strong id="fundTicker" style="color: var(--text-main);">--</strong></span>
+                <span>ISIN: <strong id="fundIsin">--</strong></span> | 
+                <span>Ticker: <strong id="fundTicker">--</strong></span>
             </div>
             <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 8px;">
-                <span data-i18n="lastUpdateLabel">Última actualización:</span> <span id="lastUpdateGlobal" style="color: var(--text-main);">--</span><br>
+                <span data-i18n="lastUpdateLabel">Última actualización:</span> <span id="lastUpdateGlobal">--</span><br>
                 <span data-i18n="nextUpdateLabel">Próxima actualización en:</span> <strong id="countdownTimer" style="color: #38bdf8;">--:--:--</strong>
             </div>
         </div>
@@ -194,9 +190,9 @@
         </div>
     </div>
 
-    <!-- Tabla de Datos -->
+    <!-- Tabla de Precios -->
     <div class="table-container">
-        <h3 data-i18n="tableTitle" style="margin-top: 0; color: var(--text-main);">📊 Precios de Cierre Históricos y Proyectados (EUR)</h3>
+        <h3 data-i18n="tableTitle" style="margin-top: 0;">📊 Precios de Cierre Históricos y Proyectados (EUR)</h3>
         <table>
             <thead>
                 <tr>
@@ -204,7 +200,6 @@
                     <th data-i18n="thClose">Cierre Real (€)</th>
                     <th data-i18n="thArima">Predicción ARIMA (€)</th>
                     <th data-i18n="thMl">Predicción ML (€)</th>
-                    <th data-i18n="thTrend">Tendencia Predicha</th>
                     <th data-i18n="thStatus">Estado</th>
                 </tr>
             </thead>
@@ -223,8 +218,7 @@
             statusLoading: "Cargando datos...", arimaSub: "Predicción Lineal & Volatilidad Dinámica",
             mlSub: "LightGBM / XGBoost Forecast", tableTitle: "📊 Precios de Cierre Históricos y Proyectados (EUR)",
             thDate: "Fecha", thClose: "Cierre Real (€)", thArima: "Predicción ARIMA (€)", thMl: "Predicción ML (€)",
-            thTrend: "Tendencia Predicha", thStatus: "Estado", tagHistorical: "Cierre Oficial", tagForecast: "Proyección 30D",
-            trendUp: "▲ Subirá", trendDown: "▼ Bajará", trendNeutral: "— Estable", tagHistDash: "—",
+            thStatus: "Estado", tagHistorical: "Cierre Oficial", tagForecast: "Proyección 30D",
             chartHist: "Cierre Real", chartArima: "Forecast ARIMA", chartMl: "Forecast ML",
             lastUpdateLabel: "Última actualización:", nextUpdateLabel: "Próxima actualización en:"
         },
@@ -234,8 +228,7 @@
             statusLoading: "Loading data...", arimaSub: "Linear Forecast & Dynamic Volatility",
             mlSub: "LightGBM / XGBoost Forecast", tableTitle: "📊 Historical & Projected Closing Prices (EUR)",
             thDate: "Date", thClose: "Actual Close (€)", thArima: "ARIMA Forecast (€)", thMl: "ML Forecast (€)",
-            thTrend: "Predicted Trend", thStatus: "Status", tagHistorical: "Official Close", tagForecast: "30D Forecast",
-            trendUp: "▲ Bullish (Up)", trendDown: "▼ Bearish (Down)", trendNeutral: "— Flat", tagHistDash: "—",
+            thStatus: "Status", tagHistorical: "Official Close", tagForecast: "30D Forecast",
             chartHist: "Actual Close", chartArima: "ARIMA Forecast", chartMl: "ML Forecast",
             lastUpdateLabel: "Last update:", nextUpdateLabel: "Next update in:"
         }
@@ -345,38 +338,13 @@
         if (!tbody) return;
         tbody.innerHTML = '';
 
-        const basePrice = histPrices[histPrices.length - 1];
-
-        // Para las filas de proyección, la tendencia se basa en la comparación general frente al último cierre real (tendencia de subida/bajada global)
         for (let i = foreDates.length - 1; i >= 0; i--) {
-            const currentArima = arimaPrices[i];
-            const currentMl = mlPrices[i];
-
-            const arimaUp = currentArima > basePrice;
-            const mlUp = currentMl > basePrice;
-
-            let trendHtml = '';
-            let trendClass = '';
-
-            // Si ambos modelos coinciden en la tendencia respecto al cierre actual
-            if (arimaUp && mlUp) {
-                trendHtml = i18n[currentLang].trendUp;
-                trendClass = 'tag-up';
-            } else if (!arimaUp && !mlUp) {
-                trendHtml = i18n[currentLang].trendDown;
-                trendClass = 'tag-down';
-            } else {
-                trendHtml = i18n[currentLang].trendNeutral;
-                trendClass = 'tag-historical';
-            }
-
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong>${foreDates[i]}</strong></td>
                 <td>--</td>
-                <td>€${currentArima.toFixed(2)}</td>
-                <td>€${currentMl.toFixed(2)}</td>
-                <td><span class="status-tag ${trendClass}">${trendHtml}</span></td>
+                <td>€${arimaPrices[i].toFixed(2)}</td>
+                <td>€${mlPrices[i].toFixed(2)}</td>
                 <td><span class="status-tag tag-forecast">${i18n[currentLang].tagForecast}</span></td>
             `;
             tbody.appendChild(tr);
@@ -389,7 +357,6 @@
                 <td><strong>€${histPrices[i].toFixed(2)}</strong></td>
                 <td>--</td>
                 <td>--</td>
-                <td><span style="color: var(--text-muted);">${i18n[currentLang].tagHistDash}</span></td>
                 <td><span class="status-tag tag-historical">${i18n[currentLang].tagHistorical}</span></td>
             `;
             tbody.appendChild(tr);
