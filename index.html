@@ -50,7 +50,7 @@
     async function fetchMarketData(etf) {
         const yfUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${etf.ticker}?range=1mo&interval=1d`;
 
-        // Proveedor 1: Yahoo Finance a través de Corsproxy.io
+        // Proveedor 1: Yahoo Finance vía Corsproxy.io
         try {
             const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(yfUrl)}`);
             if (res.ok) {
@@ -62,7 +62,7 @@
             console.warn("Proveedor 1 (Corsproxy) falló:", e);
         }
 
-        // Proveedor 2: Yahoo Finance a través de Allorigins Proxy
+        // Proveedor 2: Yahoo Finance vía Allorigins Proxy
         try {
             const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(yfUrl)}`);
             if (res.ok) {
@@ -74,7 +74,7 @@
             console.warn("Proveedor 2 (Allorigins) falló:", e);
         }
 
-        // Proveedor 3: Stooq (Servicio financiero alternativo en formato CSV)
+        // Proveedor 3: Stooq (Servicio financiero alternativo)
         try {
             const stooqUrl = `https://stooq.com/q/d/l/?s=${etf.stooqTicker}&i=d`;
             const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(stooqUrl)}`);
@@ -125,10 +125,17 @@
     async function loadEtfData(isin) {
         currentIsin = isin;
         const etf = etfMap[isin];
-        document.getElementById('fundNameTitle').textContent = etf.name;
-        document.getElementById('fundIsin').textContent = isin;
-        document.getElementById('fundTicker').textContent = etf.ticker;
-        document.getElementById('statusMessage').textContent = i18n[currentLang].statusLoading;
+        if (!etf) return;
+
+        const nameEl = document.getElementById('fundNameTitle');
+        const isinEl = document.getElementById('fundIsin');
+        const tickerEl = document.getElementById('fundTicker');
+        const statusEl = document.getElementById('statusMessage');
+
+        if (nameEl) nameEl.textContent = etf.name;
+        if (isinEl) isinEl.textContent = isin;
+        if (tickerEl) tickerEl.textContent = etf.ticker;
+        if (statusEl) statusEl.textContent = i18n[currentLang].statusLoading;
 
         try {
             const { dateLabels, historicalPrices } = await fetchMarketData(etf);
@@ -136,11 +143,13 @@
             const lastPrice = historicalPrices[historicalPrices.length - 1];
             const lastDate = dateLabels[dateLabels.length - 1];
 
-            document.getElementById('latestCloseDate').textContent = lastDate;
-            document.getElementById('latestClosePrice').textContent = `€${lastPrice.toFixed(2)}`;
-            document.getElementById('statusMessage').textContent = i18n[currentLang].statusReady;
+            const dateEl = document.getElementById('latestCloseDate');
+            const priceEl = document.getElementById('latestClosePrice');
 
-            // Generar proyecciones a 30 días
+            if (dateEl) dateEl.textContent = lastDate;
+            if (priceEl) priceEl.textContent = `€${lastPrice.toFixed(2)}`;
+            if (statusEl) statusEl.textContent = i18n[currentLang].statusReady;
+
             const forecastDays = 30;
             const forecastLabels = [];
             const arimaPrices = [];
@@ -159,12 +168,15 @@
             renderCharts(dateLabels, historicalPrices, forecastLabels, arimaPrices, mlPrices);
         } catch (err) {
             console.error(err);
-            document.getElementById('statusMessage').textContent = "Error de conexión con datos de mercado.";
+            if (statusEl) statusEl.textContent = "Error de conexión con datos de mercado.";
+            const priceEl = document.getElementById('latestClosePrice');
+            if (priceEl) priceEl.textContent = "-- EUR";
         }
     }
 
     function renderTable(histDates, histPrices, foreDates, arimaPrices, mlPrices) {
         const tbody = document.getElementById('closingPricesTableBody');
+        if (!tbody) return;
         tbody.innerHTML = '';
 
         for (let i = foreDates.length - 1; i >= 0; i--) {
@@ -193,6 +205,10 @@
     }
 
     function renderCharts(histDates, histPrices, foreDates, arimaPrices, mlPrices) {
+        const arimaCanvas = document.getElementById('arimaChart');
+        const mlCanvas = document.getElementById('mlChart');
+        if (!arimaCanvas || !mlCanvas) return;
+
         const fullLabels = [...histDates, ...foreDates];
         const lastPrice = histPrices[histPrices.length - 1];
 
@@ -212,7 +228,7 @@
             plugins: { legend: { labels: { color: '#f8fafc' } } }
         };
 
-        arimaChartInstance = new Chart(document.getElementById('arimaChart').getContext('2d'), {
+        arimaChartInstance = new Chart(arimaCanvas.getContext('2d'), {
             type: 'line',
             data: {
                 labels: fullLabels,
@@ -224,7 +240,7 @@
             options: opts
         });
 
-        mlChartInstance = new Chart(document.getElementById('mlChart').getContext('2d'), {
+        mlChartInstance = new Chart(mlCanvas.getContext('2d'), {
             type: 'line',
             data: {
                 labels: fullLabels,
@@ -237,5 +253,7 @@
         });
     }
 
-    loadEtfData('LU1681042435');
+    document.addEventListener('DOMContentLoaded', () => {
+        loadEtfData('LU1681042435');
+    });
 </script>
