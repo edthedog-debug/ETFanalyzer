@@ -141,6 +141,13 @@
     <!-- Controles de Navegación -->
     <div class="header-controls">
         <div>
+            <label data-i18n="selectEtf">Seleccionar ETF:</label>
+            <select id="etfSelector" onchange="loadEtfData(this.value)">
+                <option value="LU1681042435">Amundi MSCI Europe Growth</option>
+                <option value="IE00BYX5NX33">iShares Core MSCI Europe</option>
+            </select>
+        </div>
+        <div>
             <label data-i18n="selectLang">Idioma / Language:</label>
             <select onchange="changeLanguage(this.value)">
                 <option value="es">Español</option>
@@ -206,7 +213,7 @@
 <script>
     const i18n = {
         es: {
-            currency: "Divisa", selectLang: "Idioma / Language:",
+            currency: "Divisa", selectEtf: "Seleccionar ETF:", selectLang: "Idioma / Language:",
             lastClose: "Último Cierre Registrado:", statusReady: "Datos sincronizados desde repositorio local",
             statusLoading: "Cargando datos...", arimaSub: "Predicción Lineal & Volatilidad Dinámica",
             mlSub: "LightGBM / XGBoost Forecast", tableTitle: "📊 Precios de Cierre Históricos y Proyectados (EUR)",
@@ -216,7 +223,7 @@
             lastUpdateLabel: "Última actualización:", nextUpdateLabel: "Próxima actualización en:"
         },
         en: {
-            currency: "Currency", selectLang: "Language / Idioma:",
+            currency: "Currency", selectEtf: "Select ETF:", selectLang: "Language / Idioma:",
             lastClose: "Latest Registered Close:", statusReady: "Data synchronized from local repository",
             statusLoading: "Loading data...", arimaSub: "Linear Forecast & Dynamic Volatility",
             mlSub: "LightGBM / XGBoost Forecast", tableTitle: "📊 Historical & Projected Closing Prices (EUR)",
@@ -228,7 +235,7 @@
     };
 
     let currentLang = 'es';
-    const currentIsin = 'LU1681042435';
+    let currentIsin = 'LU1681042435';
     let arimaChartInstance = null;
     let mlChartInstance = null;
     let globalMarketData = null;
@@ -299,6 +306,7 @@
     }
 
     function loadEtfData(isin) {
+        currentIsin = isin;
         if (!globalMarketData || !globalMarketData.etfs[isin]) return;
 
         const etfData = globalMarketData.etfs[isin];
