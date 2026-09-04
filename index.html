@@ -1,3 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETF Forecasting Dashboard</title>
+    <!-- Importar Chart.js para renderizar las gráficas de predicción -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #3b82f6;
+            --border-color: #334155;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Cabecera y Controles */
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--card-bg);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        select {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            border-radius: 4px;
+            margin-left: 10px;
+            cursor: pointer;
+        }
+
+        /* Tarjetas de Información */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .card h3 { margin: 0 0 5px 0; font-size: 14px; color: var(--text-muted); }
+        .card p { margin: 0; font-size: 24px; font-weight: bold; }
+        
+        #statusMessage {
+            font-size: 12px;
+            color: #fbbf24;
+            margin-top: 10px;
+        }
+
+        /* Gráficas */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            height: 350px;
+            position: relative;
+        }
+
+        .chart-container h4 {
+            margin-top: 0;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        /* Tabla de Datos */
+        .table-container {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th { color: var(--text-muted); font-weight: normal; }
+
+        .status-tag {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .tag-historical { background-color: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .tag-forecast { background-color: rgba(168, 85, 247, 0.2); color: #c084fc; }
+
+        @media (max-width: 768px) {
+            .charts-grid { grid-template-columns: 1fr; }
+            .header-controls { flex-direction: column; gap: 15px; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Controles de Navegación -->
+    <div class="header-controls">
+        <div>
+            <label data-i18n="selectEtf">Seleccionar ETF:</label>
+            <select id="etfSelector" onchange="loadEtfData(this.value)">
+                <option value="LU1681042435">Amundi MSCI Europe Growth</option>
+                <option value="IE00BYX5NX33">iShares Core MSCI Europe</option>
+            </select>
+        </div>
+        <div>
+            <label data-i18n="selectLang">Idioma / Language:</label>
+            <select onchange="changeLanguage(this.value)">
+                <option value="es">Español</option>
+                <option value="en">English</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Panel de Información Principal -->
+    <div class="info-grid">
+        <div class="card">
+            <h3 data-i18n="lastClose">Último Cierre Registrado:</h3>
+            <p id="latestClosePrice">-- €</p>
+            <span id="latestCloseDate" style="color: var(--text-muted); font-size: 14px;">--/--/----</span>
+            <div id="statusMessage">Iniciando...</div>
+        </div>
+        <div class="card">
+            <h3>Fondo / ETF</h3>
+            <p id="fundNameTitle" style="font-size: 18px;">Cargando...</p>
+            <div style="margin-top: 10px; font-size: 14px; color: var(--text-muted);">
+                <span>ISIN: <strong id="fundIsin">--</strong></span> | 
+                <span>Ticker: <strong id="fundTicker">--</strong></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Área de Gráficas (Series Temporales y Proyecciones) -->
+    <div class="charts-grid">
+        <div class="chart-container">
+            <h4 data-i18n="arimaSub">Predicción Lineal & Volatilidad Dinámica</h4>
+            <canvas id="arimaChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h4 data-i18n="mlSub">LightGBM / XGBoost Forecast</h4>
+            <canvas id="mlChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Tabla de Precios -->
+    <div class="table-container">
+        <h3 data-i18n="tableTitle" style="margin-top: 0;">📊 Precios de Cierre Históricos y Proyectados (EUR)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th data-i18n="thDate">Fecha</th>
+                    <th data-i18n="thClose">Cierre Real (€)</th>
+                    <th data-i18n="thArima">Predicción ARIMA (€)</th>
+                    <th data-i18n="thMl">Predicción ML (€)</th>
+                    <th data-i18n="thStatus">Estado</th>
+                </tr>
+            </thead>
+            <tbody id="closingPricesTableBody">
+                <!-- Se inyecta dinámicamente vía JS -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <script>
     const etfMap = {
         "LU1681042435": { 
@@ -47,13 +255,24 @@
         loadEtfData(currentIsin);
     }
 
-    // Parseador robusto para la respuesta de Yahoo Finance
-    function parseYahooResponse(data) {
+    async function fetchMarketData(etf) {
+        // Obtenemos los datos directamente de Yahoo Finance a través de un proxy público estable
+        const yfUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${etf.ticker}?range=1mo&interval=1d`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(yfUrl)}`;
+        
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error("Error en la descarga de datos de mercado");
+        
+        const data = await res.json();
         const result = data?.chart?.result?.[0];
-        if (!result || !result.timestamp || !result.indicators?.quote?.[0]?.close) return null;
+        
+        if (!result || !result.timestamp || !result.indicators?.quote?.[0]?.close) {
+            throw new Error("Formato de datos no válido o sin histórico");
+        }
 
         const timestamps = result.timestamp;
         const prices = result.indicators.quote[0].close;
+
         const dateLabels = [];
         const historicalPrices = [];
 
@@ -65,42 +284,15 @@
             }
         });
 
-        return historicalPrices.length > 0 ? { dateLabels, historicalPrices } : null;
-    }
+        if (historicalPrices.length === 0) throw new Error("No hay precios registrados en este periodo");
 
-    // Sistema de conectores en cascada (Si falla uno, salta al siguiente)
-    async function fetchMarketData(etf) {
-        const yfUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${etf.ticker}?range=1mo&interval=1d`;
-        
-        const proxies = [
-            `https://api.allorigins.win/raw?url=${encodeURIComponent(yfUrl)}`,
-            `https://api.codetabs.com/v1/proxy?quest=${yfUrl}`
-        ];
-
-        for (const proxy of proxies) {
-            try {
-                const res = await fetch(proxy);
-                if (res.ok) {
-                    const data = await res.json();
-                    const parsedData = parseYahooResponse(data);
-                    if (parsedData) return parsedData;
-                }
-            } catch (err) {
-                console.warn(`Fallo en conector proxy: ${proxy}`, err);
-            }
-        }
-
-        throw new Error("No se pudo conectar a ningún proveedor de datos de mercado.");
+        return { dateLabels, historicalPrices };
     }
 
     async function loadEtfData(isin) {
         currentIsin = isin;
         const etf = etfMap[isin];
         if (!etf) return;
-
-        // 1. DIBUJAR INTERFAZ VACÍA PRIMERO PARA EVITAR PANTALLA EN BLANCO
-        renderTable([], [], [], [], []);
-        renderCharts([], [], [], [], []);
 
         const nameEl = document.getElementById('fundNameTitle');
         const isinEl = document.getElementById('fundIsin');
@@ -111,21 +303,20 @@
         if (isinEl) isinEl.textContent = isin;
         if (tickerEl) tickerEl.textContent = etf.ticker;
         if (statusEl) statusEl.textContent = i18n[currentLang].statusLoading;
-        document.getElementById('latestClosePrice').textContent = "-- EUR";
-        document.getElementById('latestCloseDate').textContent = "--";
 
-        // 2. INTENTAR OBTENER DATOS
         try {
             const { dateLabels, historicalPrices } = await fetchMarketData(etf);
 
             const lastPrice = historicalPrices[historicalPrices.length - 1];
             const lastDate = dateLabels[dateLabels.length - 1];
 
-            document.getElementById('latestCloseDate').textContent = lastDate;
-            document.getElementById('latestClosePrice').textContent = `€${lastPrice.toFixed(2)}`;
+            const dateEl = document.getElementById('latestCloseDate');
+            const priceEl = document.getElementById('latestClosePrice');
+
+            if (dateEl) dateEl.textContent = lastDate;
+            if (priceEl) priceEl.textContent = `€${lastPrice.toFixed(2)}`;
             if (statusEl) statusEl.textContent = i18n[currentLang].statusReady;
 
-            // Proyecciones a 30 días basadas en el último cierre
             const forecastDays = 30;
             const forecastLabels = [];
             const arimaPrices = [];
@@ -140,13 +331,13 @@
                 mlPrices.push(parseFloat((lastPrice + (i * (lastPrice * 0.0006)) + Math.cos(i * 0.4) * (lastPrice * 0.003)).toFixed(2)));
             }
 
-            // 3. ACTUALIZAR INTERFAZ CON DATOS REALES
             renderTable(dateLabels, historicalPrices, forecastLabels, arimaPrices, mlPrices);
             renderCharts(dateLabels, historicalPrices, forecastLabels, arimaPrices, mlPrices);
         } catch (err) {
             console.error("Error al cargar datos:", err);
-            if (statusEl) statusEl.textContent = "Error de conexión: No se pudieron descargar los datos de mercado.";
-            // La pantalla se mantiene renderizada pero vacía, indicando el error correctamente.
+            if (statusEl) statusEl.textContent = "Error de conexión con datos de mercado.";
+            const priceEl = document.getElementById('latestClosePrice');
+            if (priceEl) priceEl.textContent = "-- EUR";
         }
     }
 
@@ -154,11 +345,6 @@
         const tbody = document.getElementById('closingPricesTableBody');
         if (!tbody) return;
         tbody.innerHTML = '';
-
-        if (histDates.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Esperando datos del mercado...</td></tr>`;
-            return;
-        }
 
         for (let i = foreDates.length - 1; i >= 0; i--) {
             const tr = document.createElement('tr');
@@ -190,13 +376,12 @@
         const mlCanvas = document.getElementById('mlChart');
         if (!arimaCanvas || !mlCanvas) return;
 
-        // Si no hay datos, inicializamos con arrays vacíos para mantener la estructura visual
-        const fullLabels = histDates.length > 0 ? [...histDates, ...foreDates] : [];
-        const lastPrice = histPrices.length > 0 ? histPrices[histPrices.length - 1] : null;
+        const fullLabels = [...histDates, ...foreDates];
+        const lastPrice = histPrices[histPrices.length - 1];
 
-        const arimaFut = histDates.length > 0 ? [...Array(histDates.length - 1).fill(null), lastPrice, ...arimaPrices] : [];
-        const mlFut = histDates.length > 0 ? [...Array(histDates.length - 1).fill(null), lastPrice, ...mlPrices] : [];
-        const histData = histDates.length > 0 ? [...histPrices, ...Array(foreDates.length).fill(null)] : [];
+        const arimaFut = [...Array(histDates.length - 1).fill(null), lastPrice, ...arimaPrices];
+        const mlFut = [...Array(histDates.length - 1).fill(null), lastPrice, ...mlPrices];
+        const histData = [...histPrices, ...Array(foreDates.length).fill(null)];
 
         if (arimaChartInstance) arimaChartInstance.destroy();
         if (mlChartInstance) mlChartInstance.destroy();
@@ -235,10 +420,12 @@
         });
     }
 
-    // Inicialización a prueba de fallos
+    // Inicialización segura tras cargar el DOM
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => loadEtfData('LU1681042435'));
     } else {
         loadEtfData('LU1681042435');
     }
 </script>
+</body>
+</html>
