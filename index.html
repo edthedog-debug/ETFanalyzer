@@ -20,7 +20,8 @@
             mlSub: "LightGBM / XGBoost Forecast", tableTitle: "📊 Precios de Cierre Históricos y Proyectados (EUR)",
             thDate: "Fecha", thClose: "Cierre Real (€)", thArima: "Predicción ARIMA (€)", thMl: "Predicción ML (€)",
             thStatus: "Estado", tagHistorical: "Cierre Oficial", tagForecast: "Proyección 30D",
-            chartHist: "Cierre Real", chartArima: "Forecast ARIMA", chartMl: "Forecast ML"
+            chartHist: "Cierre Real", chartArima: "Forecast ARIMA", chartMl: "Forecast ML",
+            errorConnection: "Error de conexión con datos de mercado. No se pudieron obtener datos reales."
         },
         en: {
             currency: "Currency", selectEtf: "Select ETF:", selectLang: "Language / Idioma:",
@@ -29,7 +30,8 @@
             mlSub: "LightGBM / XGBoost Forecast", tableTitle: "📊 Historical & Projected Closing Prices (EUR)",
             thDate: "Date", thClose: "Actual Close (€)", thArima: "ARIMA Forecast (€)", thMl: "ML Forecast (€)",
             thStatus: "Status", tagHistorical: "Official Close", tagForecast: "30D Forecast",
-            chartHist: "Actual Close", chartArima: "ARIMA Forecast", chartMl: "ML Forecast"
+            chartHist: "Actual Close", chartArima: "ARIMA Forecast", chartMl: "ML Forecast",
+            errorConnection: "Market data connection error. Could not retrieve real data."
         }
     };
 
@@ -51,19 +53,29 @@
         // Proveedor directo mediante Financial Modeling Prep API (Demo Key abierta)
         const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${etf.symbol}?timeseries=30&apikey=demo`;
         
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Error en API de mercado");
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // Timeout de 10 segundos
         
-        const data = await res.json();
-        if (!data.historical || data.historical.length === 0) {
-            throw new Error("Sin datos históricos");
+        try {
+            const res = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            
+            if (!res.ok) throw new Error("Error en API de mercado");
+            
+            const data = await res.json();
+            if (!data.historical || data.historical.length === 0) {
+                throw new Error("Sin datos históricos");
+            }
+
+            const historicalData = data.historical.reverse();
+            const dateLabels = historicalData.map(item => item.date);
+            const historicalPrices = historicalData.map(item => parseFloat(item.close.toFixed(2)));
+
+            return { dateLabels, historicalPrices };
+        } catch (err) {
+            clearTimeout(timeoutId);
+            throw err;
         }
-
-        const historicalData = data.historical.reverse();
-        const dateLabels = historicalData.map(item => item.date);
-        const historicalPrices = historicalData.map(item => parseFloat(item.close.toFixed(2)));
-
-        return { dateLabels, historicalPrices };
     }
 
     async function loadEtfData(isin) {
@@ -112,9 +124,25 @@
             renderCharts(dateLabels, historicalPrices, forecastLabels, arimaPrices, mlPrices);
         } catch (err) {
             console.error("Error al cargar datos:", err);
-            if (statusEl) statusEl.textContent = "Error de conexión con datos de mercado.";
+            if (statusEl) statusEl.textContent = i18n[currentLang].errorConnection;
+            
+            const dateEl = document.getElementById('latestCloseDate');
             const priceEl = document.getElementById('latestClosePrice');
+            const tbody = document.getElementById('closingPricesTableBody');
+            
+            if (dateEl) dateEl.textContent = "--";
             if (priceEl) priceEl.textContent = "-- EUR";
+            if (tbody) tbody.innerHTML = '';
+            
+            // Limpiar gráficos si existen
+            if (arimaChartInstance) {
+                arimaChartInstance.destroy();
+                arimaChartInstance = null;
+            }
+            if (mlChartInstance) {
+                mlChartInstance.destroy();
+                mlChartInstance = null;
+            }
         }
     }
 
